@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use core::fmt;
-use std::{env, fs::File, io::Read, println, write};
+use std::{env, fs::File, io::Read, println, write, unimplemented};
 
 #[derive(Debug)]
 enum Operator {
@@ -78,6 +78,14 @@ impl ASTNode {
         new_root
     }
 
+    fn add_left_child(&mut self, token: Token) {
+        self.left = Some(Box::new(ASTNode {
+            token,
+            left: None,
+            right: None,
+        }));
+    }
+
     fn add_right_child(&mut self, token: Token) {
         self.right = Some(Box::new(ASTNode {
             token,
@@ -102,8 +110,8 @@ fn parse(contents: &str) -> Result<ASTNode> {
             let token = Token::from_digit(ch);
             match root.token {
                 Token::Empty => {
-                    root.token = token;
-                }
+                    root.add_left_child(token)
+                },
                 Token::Operator(ref operator) => match operator {
                     Operator::And => {
                         root.add_right_child(token);
@@ -113,6 +121,12 @@ fn parse(contents: &str) -> Result<ASTNode> {
                 _ => return Err(anyhow!("Expected operator after a value")),
             };
         };
+
+        // if ch == '(' {
+        //     match root.token {
+
+        //     }
+        // }
 
         if ch == '^' {
             let token = Token::Operator(Operator::And);
@@ -124,12 +138,29 @@ fn parse(contents: &str) -> Result<ASTNode> {
                     let new_root = ASTNode::make_new_root(root, token);
                     root = new_root;
                 }
+                Token::Operator(op) => match op {
+                    Operator::Not => unimplemented!(),
+                    val => return Err(anyhow!("Invalid syntax: unexpected {} after {:?}", token, val))
+                }
                 _ => {}
             };
         };
         if ch == 'v' {
             let token = Token::Operator(Operator::Or);
-            println!("{:?}", token);
+            match root.token {
+                Token::Empty => {
+                    root.token = token;
+                }
+                Token::Value(_) => {
+                    let new_root = ASTNode::make_new_root(root, token);
+                    root = new_root;
+                }
+                Token::Operator(op) => match op {
+                    Operator::Not => unimplemented!(),
+                    val => return Err(anyhow!("Invalid syntax: unexpected {} after {:?}", token, val))
+                }
+                _ => {}
+            };
         };
     };
     Ok(root)
