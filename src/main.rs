@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Result};
 use core::fmt;
-use std::{env, fs::File, io::Read, println, write, unimplemented};
+use std::{env, fs::File, io::Read, println, unimplemented, write};
 
 #[derive(Debug)]
 enum Operator {
     And,
     Or,
-    Not
+    Not,
 }
 
 #[derive(Debug)]
@@ -69,7 +69,7 @@ impl fmt::Display for ASTNode {
 }
 
 impl ASTNode {
-    fn make_new_root(self, token: Token) -> ASTNode {
+    fn make_new_root_left(self, token: Token) -> ASTNode {
         let new_root = ASTNode {
             token,
             left: Some(Box::new(self)),
@@ -95,6 +95,15 @@ impl ASTNode {
     }
 }
 
+fn go_down_right(node: &mut Box<ASTNode>, token: Token) {
+    match node.right {
+        Some(ref mut right) => go_down_right(right, token),
+        None => node.add_right_child(token),
+    };
+}
+
+// Q: is it always necessary to start from the root?
+
 fn parse(contents: &str) -> Result<ASTNode> {
     let mut root = ASTNode {
         token: Token::Empty,
@@ -109,24 +118,33 @@ fn parse(contents: &str) -> Result<ASTNode> {
         if ch.is_digit(10) {
             let token = Token::from_digit(ch);
             match root.token {
-                Token::Empty => {
-                    root.add_left_child(token)
-                },
+                Token::Empty => root.add_left_child(token),
                 Token::Operator(ref operator) => match operator {
                     Operator::And => {
-                        root.add_right_child(token);
-                    },
-                    _ => {},
+                        match root.right {
+                            Some(ref mut right) => {
+                                go_down_right(right, token);
+                            }
+                            None => {
+                                root.add_right_child(token);
+                            }
+                        };
+                    }
+                    Operator::Or => {
+                        match root.right {
+                            Some(ref mut right) => {
+                                go_down_right(right, token);
+                            }
+                            None => {
+                                root.add_right_child(token);
+                            }
+                        };
+                    }
+                    _ => unimplemented!(),
                 },
                 _ => return Err(anyhow!("Expected operator after a value")),
             };
         };
-
-        // if ch == '(' {
-        //     match root.token {
-
-        //     }
-        // }
 
         if ch == '^' {
             let token = Token::Operator(Operator::And);
@@ -134,17 +152,27 @@ fn parse(contents: &str) -> Result<ASTNode> {
                 Token::Empty => {
                     root.token = token;
                 }
-                Token::Value(_) => {
-                    let new_root = ASTNode::make_new_root(root, token);
-                    root = new_root;
-                }
-                Token::Operator(op) => match op {
+                Token::Value(_) => panic!("Value can never be a root"),
+                Token::Operator(ref op) => match op {
                     Operator::Not => unimplemented!(),
-                    val => return Err(anyhow!("Invalid syntax: unexpected {} after {:?}", token, val))
-                }
-                _ => {}
+                    Operator::Or => {
+                        // take right child of root and place node there
+                        // make this child left of this node
+                        let right = root.right.take();
+                        let node = ASTNode {
+                            token,
+                            left: right,
+                            right: None,
+                        };
+                        root.right = Some(Box::new(node));
+                    }
+                    Operator::And => {
+                        root = root.make_new_root_left(token);
+                    }
+                },
             };
         };
+
         if ch == 'v' {
             let token = Token::Operator(Operator::Or);
             match root.token {
@@ -152,17 +180,20 @@ fn parse(contents: &str) -> Result<ASTNode> {
                     root.token = token;
                 }
                 Token::Value(_) => {
-                    let new_root = ASTNode::make_new_root(root, token);
-                    root = new_root;
+                    root = root.make_new_root_left(token);
                 }
-                Token::Operator(op) => match op {
+                Token::Operator(ref op) => match op {
                     Operator::Not => unimplemented!(),
-                    val => return Err(anyhow!("Invalid syntax: unexpected {} after {:?}", token, val))
-                }
-                _ => {}
+                    Operator::Or => {
+                        root = root.make_new_root_left(token);
+                    }
+                    Operator::And => {
+                        root = root.make_new_root_left(token);
+                    }
+                },
             };
         };
-    };
+    }
     Ok(root)
 }
 
