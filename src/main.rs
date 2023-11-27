@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use core::fmt;
-use std::{env, fs::File, io::Read, println, unimplemented, write};
+use std::{collections::VecDeque, env, fs::File, io::Read, println, unimplemented, write};
 
 #[derive(Debug)]
 enum Operator {
@@ -42,6 +42,7 @@ impl fmt::Display for Token {
 #[derive(Debug)]
 struct ASTNode {
     token: Token,
+    visited: bool,
     left: Option<Box<ASTNode>>,
     right: Option<Box<ASTNode>>,
 }
@@ -72,6 +73,7 @@ impl ASTNode {
     fn make_new_root_left(self, token: Token) -> ASTNode {
         let new_root = ASTNode {
             token,
+            visited: false,
             left: Some(Box::new(self)),
             right: None,
         };
@@ -81,6 +83,7 @@ impl ASTNode {
     fn add_left_child(&mut self, token: Token) {
         self.left = Some(Box::new(ASTNode {
             token,
+            visited: false,
             left: None,
             right: None,
         }));
@@ -89,9 +92,36 @@ impl ASTNode {
     fn add_right_child(&mut self, token: Token) {
         self.right = Some(Box::new(ASTNode {
             token,
+            visited: false,
             left: None,
             right: None,
         }));
+    }
+
+    fn print_graph(self) {
+        let mut queue = VecDeque::new();
+        queue.push_back(Box::new(self));
+        loop {
+            match queue.pop_front() {
+                Some(mut node) => {
+                    node.visited = true;
+                    println!("{}", node);
+                    if let Some(left) = node.left {
+                        match left.token {
+                            Token::Operator(_) => queue.push_back(left),
+                            _ => {}
+                        };
+                    };
+                    if let Some(right) = node.right {
+                        match right.token {
+                            Token::Operator(_) => queue.push_back(right),
+                            _ => {}
+                        };
+                    };
+                }
+                None => break,
+            }
+        }
     }
 }
 
@@ -107,6 +137,7 @@ fn go_down_right(node: &mut Box<ASTNode>, token: Token) {
 fn parse(contents: &str) -> Result<ASTNode> {
     let mut root = ASTNode {
         token: Token::Empty,
+        visited: false,
         left: None,
         right: None,
     };
@@ -161,6 +192,7 @@ fn parse(contents: &str) -> Result<ASTNode> {
                         let right = root.right.take();
                         let node = ASTNode {
                             token,
+                            visited: false,
                             left: right,
                             right: None,
                         };
@@ -206,6 +238,6 @@ fn main() -> Result<()> {
     file.read_to_string(&mut buffer)?;
     let ast_root = parse(&buffer)?;
 
-    println!("Root: {}", ast_root);
+    ast_root.print_graph();
     Ok(())
 }
