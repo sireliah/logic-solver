@@ -1,11 +1,7 @@
-use crate::lexer::Token;
-use anyhow::Result;
-use std::{
-    collections::VecDeque,
-    fmt,
-    fs::File,
-    io::Write,
-};
+use anyhow::{anyhow, Result};
+use std::{collections::VecDeque, fmt, fs::File, io::Write};
+
+use crate::lexer::{Lexer, Operator, Token};
 
 #[derive(Debug)]
 pub struct ASTNode {
@@ -60,32 +56,6 @@ impl ASTNode {
             left: None,
             right: None,
         }));
-    }
-
-    #[allow(dead_code)]
-    pub fn print_graph(self) {
-        let mut queue = VecDeque::new();
-        queue.push_back(Box::new(self));
-        loop {
-            match queue.pop_front() {
-                Some(node) => {
-                    println!("{}", node);
-                    if let Some(left) = node.left {
-                        match left.token {
-                            Token::Operator(_) => queue.push_back(left),
-                            _ => {}
-                        };
-                    };
-                    if let Some(right) = node.right {
-                        match right.token {
-                            Token::Operator(_) => queue.push_back(right),
-                            _ => {}
-                        };
-                    };
-                }
-                None => break,
-            }
-        }
     }
 
     /// Outputs graph in graphviz format
@@ -147,4 +117,102 @@ impl ASTNode {
         file.write("}".as_bytes())?;
         Ok(())
     }
+}
+
+pub fn construct_ast(mut root: ASTNode, lexer: &mut Lexer) -> Result<ASTNode> {
+    loop {
+        if let Some(token) = lexer.next() {
+            match token {
+                Token::Value(_) => handle_value(&mut root, token)?,
+                Token::Operator(_) => root = handle_operator(root, token)?,
+                Token::ParenthisOpen => {
+                    let new_root = ASTNode {
+                        token: Token::Empty,
+                        left: None,
+                        right: None,
+                    };
+                    let sub_node = construct_ast(new_root, lexer)?;
+
+                    if let Token::Empty = root.token {
+                        root.left = Some(Box::new(sub_node));
+                    } else {
+                        root.right = Some(Box::new(sub_node));
+                    }
+                }
+                Token::ParenthisClosed => return Ok(root),
+                Token::Empty => unimplemented!(),
+            }
+        } else {
+            break;
+        }
+    }
+    Ok(root)
+}
+
+fn descend_right(node: &mut Box<ASTNode>, token: Token) {
+    match node.right {
+        Some(ref mut right) => descend_right(right, token),
+        None => node.add_right_child(token),
+    };
+}
+
+fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
+    match root.token {
+        Token::Empty => root.add_left_child(token),
+        Token::Operator(ref operator) => match operator {
+            Operator::And => {
+                match root.right {
+                    Some(ref mut right) => {
+                        descend_right(right, token);
+                    }
+                    None => {
+                        root.add_right_child(token);
+                    }
+                };
+            }
+            Operator::Or => {
+                match root.right {
+                    Some(ref mut right) => {
+                        descend_right(right, token);
+                    }
+                    None => {
+                        root.add_right_child(token);
+                    }
+                };
+            }
+            _ => unimplemented!(),
+        },
+        _ => return Err(anyhow!("Expected operator after a value")),
+    };
+    Ok(())
+}
+
+fn handle_operator(mut root: ASTNode, token: Token) -> Result<ASTNode> {
+    match root.token {
+        Token::Empty => {
+            root.token = token;
+        }
+        Token::Value(_) => return Err(anyhow!("Value can never be a root")),
+        Token::Operator(ref op) => match op {
+            Operator::Not => unimplemented!(),
+            Operator::Or => {
+                // take right child of root and place node there
+                // make this child left of this node
+                let right = root.right.take();
+                let node = ASTNode {
+                    token,
+                    left: right,
+                    right: None,
+                };
+                root.right = Some(Box::new(node));
+            }
+            Operator::And => {
+                let new_root = root.make_new_root_left(token);
+                return Ok(new_root);
+            }
+        },
+        // FIXME: Cover missing
+        _ => unimplemented!(),
+    };
+    Ok(root)
 }
