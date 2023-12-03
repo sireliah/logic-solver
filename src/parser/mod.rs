@@ -3,7 +3,7 @@ use std::{collections::VecDeque, fmt, fs::File, io::Write};
 
 use crate::lexer::Token;
 mod construct;
-pub use construct::{construct_ast};
+pub use construct::{construct_ast, construct_rpn, construct_ast_from_rpn};
 
 #[derive(Debug)]
 pub struct ASTNode {

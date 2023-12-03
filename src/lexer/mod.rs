@@ -9,7 +9,7 @@ pub enum Operator {
     ParenthisOpen,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Value {
     Bool(bool),
     Variable(String),
@@ -24,7 +24,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Token {
     Value(Value),
     Operator(Operator),

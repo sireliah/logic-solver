@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::env;
 
-use logic_solver::parser::{ASTNode, construct_ast};
+use logic_solver::parser::{ASTNode, construct_ast, construct_rpn, construct_ast_from_rpn};
 use logic_solver::lexer::{Lexer, Token};
 
 fn parse(contents: &str) -> Result<ASTNode> {
@@ -13,7 +13,8 @@ fn parse(contents: &str) -> Result<ASTNode> {
         right: None,
     };
     let mut lexer = Lexer::new(contents);
-    root = construct_ast(root, &mut lexer)?;
+    let queue = construct_rpn(&mut lexer);
+    root = construct_ast_from_rpn(root, queue)?;
     Ok(root)
 }
 
