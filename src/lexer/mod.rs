@@ -1,10 +1,12 @@
 use std::{fmt, str::Chars};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Operator {
-    And,
     Or,
+    And,
     Not,
+    ParenthisClosed,
+    ParenthisOpen,
 }
 
 #[derive(Debug)]
@@ -26,8 +28,6 @@ impl fmt::Display for Value {
 pub enum Token {
     Value(Value),
     Operator(Operator),
-    ParenthisOpen,
-    ParenthisClosed,
     Empty,
 }
 
@@ -43,8 +43,6 @@ impl fmt::Display for Token {
         match self {
             Token::Value(v) => write!(f, "{}", v),
             Token::Operator(v) => write!(f, "{:?}", v),
-            Token::ParenthisOpen => write!(f, "("),
-            Token::ParenthisClosed => write!(f, ")"),
             Token::Empty => write!(f, "Empty"),
         }
     }
@@ -71,8 +69,9 @@ impl Iterator for Lexer<'_> {
             let token = match ch {
                 Some('^') => Token::Operator(Operator::And),
                 Some('v') => Token::Operator(Operator::Or),
-                Some('(') => Token::ParenthisOpen,
-                Some(')') => Token::ParenthisClosed,
+                Some('~') => Token::Operator(Operator::Not),
+                Some('(') => Token::Operator(Operator::ParenthisOpen),
+                Some(')') => Token::Operator(Operator::ParenthisClosed),
                 Some(other) if other.is_digit(10) => Token::from_digit(other),
                 Some(other) if other.is_whitespace() => continue,
                 Some(_) => continue,
