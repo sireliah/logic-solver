@@ -3,9 +3,9 @@ use std::{collections::VecDeque, fmt, fs::File, io::Write};
 
 use crate::lexer::Token;
 mod construct;
-pub use construct::{construct_ast, construct_rpn, construct_ast_from_rpn};
+pub use construct::{construct_ast, construct_ast_custom};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ASTNode {
     pub token: Token,
     pub left: Option<Box<ASTNode>>,
@@ -35,6 +35,14 @@ impl fmt::Display for ASTNode {
 }
 
 impl ASTNode {
+    pub fn new(token: Token) -> ASTNode {
+        ASTNode {
+            token,
+            left: None,
+            right: None,
+        }
+    }
+
     pub fn make_new_root_left(self, token: Token) -> ASTNode {
         let new_root = ASTNode {
             token,
