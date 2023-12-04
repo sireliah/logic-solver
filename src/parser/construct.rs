@@ -41,9 +41,6 @@ pub fn construct_rpn(lexer: &mut Lexer) -> VecDeque<Token> {
                             if other_op > prev_op {
                                 operators.push(prev_op);
                                 operators.push(other_op);
-                            } else if other_op < prev_op {
-                                operators.push(other_op);
-                                output.push_back(Token::Operator(prev_op));
                             } else {
                                 operators.push(other_op);
                                 output.push_back(Token::Operator(prev_op));
@@ -60,9 +57,6 @@ pub fn construct_rpn(lexer: &mut Lexer) -> VecDeque<Token> {
         output.push_back(Token::Operator(op));
     }
 
-    // for op in output.iter() {
-    //     println!("{}", op);
-    // }
     output
 }
 
