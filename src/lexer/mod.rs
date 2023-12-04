@@ -1,7 +1,11 @@
-use std::{fmt, str::Chars};
+use std::{fmt, iter::Peekable, str::Chars};
 
+// Order of variants in this enum encodes operator precedence
+// where top one is the least significant
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Operator {
+    Equivalence,
+    Implication,
     Or,
     And,
     Not,
@@ -49,13 +53,13 @@ impl fmt::Display for Token {
 }
 
 pub struct Lexer<'a> {
-    chars: Chars<'a>,
+    chars: Peekable<Chars<'a>>,
 }
 
 impl Lexer<'_> {
     pub fn new(contents: &str) -> Lexer {
         Lexer {
-            chars: contents.chars(),
+            chars: contents.chars().peekable(),
         }
     }
 }
@@ -72,6 +76,27 @@ impl Iterator for Lexer<'_> {
                 Some('~') => Token::Operator(Operator::Not),
                 Some('(') => Token::Operator(Operator::ParenthisOpen),
                 Some(')') => Token::Operator(Operator::ParenthisClosed),
+                Some('<') => {
+                    // "<=>" equivalence
+                    let next = self.chars.next();
+                    let next_after = self.chars.next();
+                    if let (Some('='), Some('>')) = (next, next_after) {
+                        Token::Operator(Operator::Equivalence)
+                    } else {
+                        // FIXME: Add early error handling
+                        continue;
+                    }
+                }
+                Some('=') => {
+                    // "=>" implication is differentiated from equivalence only because
+                    // the iterator advanced twice on previous step
+                    let next = self.chars.peek();
+                    if let Some('>') = next {
+                        Token::Operator(Operator::Implication)
+                    } else {
+                        continue;
+                    }
+                }
                 Some(other) if other.is_digit(10) => Token::from_digit(other),
                 Some(other) if other.is_whitespace() => continue,
                 Some(_) => continue,
