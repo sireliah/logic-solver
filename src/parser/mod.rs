@@ -79,7 +79,7 @@ impl ASTNode {
 
     /// Outputs graph in graphviz format
     /// Check https://graphviz.org/pdf/dotguide.pdf
-    pub fn visualize_graph(self) -> Result<()> {
+    pub fn visualize_graph(&self) -> Result<()> {
         fn write_definition(counter: u32, token: &Token) -> String {
             match token {
                 Token::Value(_) => format!("    {} [label=\"{}\"]\n", counter, token),
@@ -103,21 +103,20 @@ impl ASTNode {
             match queue.pop_front() {
                 Some((num, node)) => {
                     if counter > 0 {
-                        println!("{}, {}", counter, node);
                         graph.push(write_definition(counter, &node.token));
                         graph_relations.push(format!("    {} -> {}\n", num, counter));
                     }
-                    if let Some(left) = node.left {
+                    if let Some(left) = &node.left {
                         match left.token {
-                            Token::Operator(_) => queue.push_back((counter, left)),
-                            Token::Value(_) => queue.push_back((counter, left)),
+                            Token::Operator(_) => queue.push_back((counter, Box::new(&left))),
+                            Token::Value(_) => queue.push_back((counter, Box::new(&left))),
                             _ => {}
                         };
                     };
-                    if let Some(right) = node.right {
+                    if let Some(right) = &node.right {
                         match right.token {
-                            Token::Operator(_) => queue.push_back((counter, right)),
-                            Token::Value(_) => queue.push_back((counter, right)),
+                            Token::Operator(_) => queue.push_back((counter, Box::new(&right))),
+                            Token::Value(_) => queue.push_back((counter, Box::new(&right))),
                             _ => {}
                         };
                     };

@@ -5,6 +5,7 @@ use std::env;
 
 use logic_solver::parser::{ASTNode, construct_ast};
 use logic_solver::lexer::Lexer;
+use logic_solver::interpreter::evaluate;
 
 fn parse(contents: &str) -> Result<ASTNode> {
     let mut lexer = Lexer::new(contents);
@@ -22,5 +23,8 @@ fn main() -> Result<()> {
     let ast_root = parse(&buffer)?;
 
     ast_root.visualize_graph()?;
+
+    let res = evaluate(ast_root);
+    println!("{:?}", res);
     Ok(())
 }

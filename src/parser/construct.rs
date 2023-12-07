@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn test_construct_rpn_and() {
         let mut lexer = Lexer::new("1 ^ 0");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
         let right = ASTNode::new(Token::Value(Value::Bool(false)));
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn test_construct_ast_and_before_or() {
         let mut lexer = Lexer::new("1 ^ 0 v 1");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
         let middle = ASTNode::new(Token::Value(Value::Bool(false)));
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn test_construct_ast_or_before_and() {
         let mut lexer = Lexer::new("1 v 0 ^ 1");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
         let middle = ASTNode::new(Token::Value(Value::Bool(false)));
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_construct_ast_parent_with_lower_prec() {
         let mut lexer = Lexer::new("1 ^ (0 v 1)");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
 
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn test_construct_ast_parent_with_higher_prec() {
         let mut lexer = Lexer::new("(1 ^ 0) v 1");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let right = ASTNode::new(Token::Value(Value::Bool(true)));
 
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn test_construct_ast_negation() {
         let mut lexer = Lexer::new("~1 v 0");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let right = ASTNode::new(Token::Value(Value::Bool(false)));
 
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn test_construct_ast_negation_double() {
         let mut lexer = Lexer::new("~1 v ~0");
-        let results = construct_ast(&mut lexer);
+        let results = construct_ast(&mut lexer).unwrap();
 
         let mut not = ASTNode::new(Token::Operator(Operator::Not));
         not.add_left_child(Token::Value(Value::Bool(true)));
