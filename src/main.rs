@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::fs::File;
 use std::io::Read;
 use std::env;
+use std::path::Path;
 
 use logic_solver::parser::{ASTNode, construct_ast};
 use logic_solver::lexer::Lexer;
@@ -22,7 +23,9 @@ fn main() -> Result<()> {
     file.read_to_string(&mut buffer)?;
     let ast_root = parse(&buffer)?;
 
-    ast_root.visualize_graph()?;
+
+    let graph_path = Path::new("graph.dot");
+    ast_root.visualize_graph(&graph_path)?;
 
     let res = evaluate(ast_root);
     println!("{:?}", res);

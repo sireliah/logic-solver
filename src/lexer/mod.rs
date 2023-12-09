@@ -86,7 +86,7 @@ impl Iterator for Lexer<'_> {
                         // FIXME: Add early error handling
                         continue;
                     }
-                }
+                },
                 Some('=') => {
                     // "=>" implication is differentiated from equivalence only because
                     // the iterator advanced twice on previous step
@@ -96,7 +96,7 @@ impl Iterator for Lexer<'_> {
                     } else {
                         continue;
                     }
-                }
+                },
                 Some(other) if other.is_digit(10) => Token::from_digit(other),
                 Some(other) if other.is_whitespace() => continue,
                 Some(_) => continue,

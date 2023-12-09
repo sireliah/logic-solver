@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::{collections::VecDeque, fmt, fs::File, io::Write};
+use std::{collections::VecDeque, fmt, fs::File, io::Write, path::Path};
 
 use crate::lexer::Token;
 mod construct;
@@ -61,7 +61,15 @@ impl ASTNode {
         new_root
     }
 
-    pub fn add_left_child(&mut self, token: Token) {
+    pub fn add_left_child(&mut self, node: ASTNode) {
+        self.left = Some(Box::new(node))
+    }
+
+    pub fn add_right_child(&mut self, node: ASTNode) {
+        self.right = Some(Box::new(node))
+    }
+
+    pub fn add_left_token(&mut self, token: Token) {
         self.left = Some(Box::new(ASTNode {
             token,
             left: None,
@@ -69,7 +77,7 @@ impl ASTNode {
         }));
     }
 
-    pub fn add_right_child(&mut self, token: Token) {
+    pub fn add_right_token(&mut self, token: Token) {
         self.right = Some(Box::new(ASTNode {
             token,
             left: None,
@@ -79,7 +87,7 @@ impl ASTNode {
 
     /// Outputs graph in graphviz format
     /// Check https://graphviz.org/pdf/dotguide.pdf
-    pub fn visualize_graph(&self) -> Result<()> {
+    pub fn visualize_graph(&self, out_path: &Path) -> Result<()> {
         fn write_definition(counter: u32, token: &Token) -> String {
             match token {
                 Token::Value(_) => format!("    {} [label=\"{}\"]\n", counter, token),
@@ -125,7 +133,7 @@ impl ASTNode {
             }
             counter += 1;
         }
-        let mut file = File::create("graph.dot")?;
+        let mut file = File::create(out_path)?;
         for definition in graph {
             file.write(definition.as_bytes())?;
         }

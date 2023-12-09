@@ -85,7 +85,9 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
         make_node(&mut tree_queue, op);
     }
 
-    tree_queue.pop().ok_or(anyhow!("Invalid syntax, expected at least one AST node left"))
+    tree_queue.pop().ok_or(anyhow!(
+        "Invalid syntax, expected at least one AST node left"
+    ))
 }
 
 pub fn construct_ast_custom(mut root: ASTNode, lexer: &mut Lexer) -> Result<ASTNode> {
@@ -121,7 +123,7 @@ pub fn construct_ast_custom(mut root: ASTNode, lexer: &mut Lexer) -> Result<ASTN
 
 fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
     match root.token {
-        Token::Empty => root.add_left_child(token),
+        Token::Empty => root.add_left_token(token),
         Token::Operator(ref operator) => match operator {
             Operator::And => {
                 match root.right {
@@ -129,7 +131,7 @@ fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
                         descend_right(right, token);
                     }
                     None => {
-                        root.add_right_child(token);
+                        root.add_right_token(token);
                     }
                 };
             }
@@ -139,7 +141,7 @@ fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
                         descend_right(right, token);
                     }
                     None => {
-                        root.add_right_child(token);
+                        root.add_right_token(token);
                     }
                 };
             }
@@ -147,9 +149,9 @@ fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
                 // FIXME: Check me
                 println!("HERE: {}", root);
                 if let Some(_) = root.left {
-                    root.add_right_child(token);
+                    root.add_right_token(token);
                 } else {
-                    root.add_left_child(token);
+                    root.add_left_token(token);
                 }
             }
             _ => unimplemented!(),
@@ -188,7 +190,7 @@ fn handle_operator(mut root: ASTNode, token: Token) -> Result<ASTNode> {
                 // FIXME: This probably doesn't cover all cases
                 match token {
                     Token::Value(_) => {
-                        root.add_right_child(token);
+                        root.add_right_token(token);
                     }
                     Token::Operator(_) => {
                         let new_root = root.make_new_root_left(token);
@@ -208,7 +210,7 @@ fn handle_operator(mut root: ASTNode, token: Token) -> Result<ASTNode> {
 fn descend_right(node: &mut Box<ASTNode>, token: Token) {
     match node.right {
         Some(ref mut right) => descend_right(right, token),
-        None => node.add_right_child(token),
+        None => node.add_right_token(token),
     };
 }
 
@@ -285,8 +287,8 @@ mod tests {
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
 
         let mut or = ASTNode::new(Token::Operator(Operator::Or));
-        or.add_left_child(Token::Value(Value::Bool(false)));
-        or.add_right_child(Token::Value(Value::Bool(true)));
+        or.add_left_token(Token::Value(Value::Bool(false)));
+        or.add_right_token(Token::Value(Value::Bool(true)));
 
         let expected = ASTNode {
             token: Token::Operator(Operator::And),
@@ -304,8 +306,27 @@ mod tests {
         let right = ASTNode::new(Token::Value(Value::Bool(true)));
 
         let mut and = ASTNode::new(Token::Operator(Operator::And));
-        and.add_left_child(Token::Value(Value::Bool(true)));
-        and.add_right_child(Token::Value(Value::Bool(false)));
+        and.add_left_token(Token::Value(Value::Bool(true)));
+        and.add_right_token(Token::Value(Value::Bool(false)));
+
+        let expected = ASTNode {
+            token: Token::Operator(Operator::Or),
+            left: Some(Box::new(and)),
+            right: Some(Box::new(right)),
+        };
+        assert_eq!(results, expected);
+    }
+
+    #[test]
+    fn test_construct_rpn_double_parent_should_not_change_anything() {
+        let mut lexer = Lexer::new("((1 ^ 0) v 1)");
+
+        let results = construct_ast(&mut lexer).unwrap();
+
+        let right = ASTNode::new(Token::Value(Value::Bool(true)));
+        let mut and = ASTNode::new(Token::Operator(Operator::And));
+        and.add_left_token(Token::Value(Value::Bool(true)));
+        and.add_right_token(Token::Value(Value::Bool(false)));
 
         let expected = ASTNode {
             token: Token::Operator(Operator::Or),
@@ -323,7 +344,7 @@ mod tests {
         let right = ASTNode::new(Token::Value(Value::Bool(false)));
 
         let mut not = ASTNode::new(Token::Operator(Operator::Not));
-        not.add_left_child(Token::Value(Value::Bool(true)));
+        not.add_left_token(Token::Value(Value::Bool(true)));
 
         let expected = ASTNode {
             token: Token::Operator(Operator::Or),
@@ -340,9 +361,9 @@ mod tests {
         let results = construct_ast(&mut lexer).unwrap();
 
         let mut not = ASTNode::new(Token::Operator(Operator::Not));
-        not.add_left_child(Token::Value(Value::Bool(true)));
+        not.add_left_token(Token::Value(Value::Bool(true)));
         let mut not2 = ASTNode::new(Token::Operator(Operator::Not));
-        not2.add_left_child(Token::Value(Value::Bool(false)));
+        not2.add_left_token(Token::Value(Value::Bool(false)));
 
         let expected = ASTNode {
             token: Token::Operator(Operator::Or),
@@ -353,126 +374,52 @@ mod tests {
         assert_eq!(results, expected);
     }
 
-    // #[test]
-    // fn test_construct_rpn_or_before_and() {
-    //     let mut lexer = Lexer::new("1 v 0 ^ 1");
-    //     let results = construct_rpn(&mut lexer);
+    #[test]
+    fn test_construct_ast_longer_statement() {
+        let mut lexer = Lexer::new("0 ^ 1 v 0 ^ 1");
+        let results = construct_ast(&mut lexer).unwrap();
 
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::And),
-    //         Token::Operator(Operator::Or),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
+        let mut left_and = ASTNode::new(Token::Operator(Operator::And));
+        left_and.add_left_token(Token::Value(Value::Bool(false)));
+        left_and.add_right_token(Token::Value(Value::Bool(true)));
 
-    // #[test]
-    // fn test_construct_rpn_parent_with_lower_prec() {
-    //     let mut lexer = Lexer::new("1 ^ (0 v 1)");
-    //     let results = construct_rpn(&mut lexer);
+        let mut right_and = ASTNode::new(Token::Operator(Operator::And));
+        right_and.add_left_token(Token::Value(Value::Bool(false)));
+        right_and.add_right_token(Token::Value(Value::Bool(true)));
 
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::Or),
-    //         Token::Operator(Operator::And),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
+        let expected = ASTNode {
+            token: Token::Operator(Operator::Or),
+            left: Some(Box::new(left_and)),
+            right: Some(Box::new(right_and)),
+        };
 
-    // #[test]
-    // fn test_construct_rpn_parent_should_not_change_anything() {
-    //     let mut lexer = Lexer::new("(1 ^ 0) v 1");
-    //     let results = construct_rpn(&mut lexer);
+        assert_eq!(results, expected);
+    }
 
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Operator(Operator::And),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::Or),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
 
-    // #[test]
-    // fn test_construct_rpn_double_parent_should_not_change_anything() {
-    //     let mut lexer = Lexer::new("((1 ^ 0) v 1)");
-    //     let results = construct_rpn(&mut lexer);
+    #[test]
+    fn test_construct_ast_equivalence_precedence() {
+        let mut lexer = Lexer::new("~1 v ~0 <=> 0");
+        let results = construct_ast(&mut lexer).unwrap();
 
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Operator(Operator::And),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::Or),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
+        let mut or = ASTNode::new(Token::Operator(Operator::Or));
+        let mut not_left = ASTNode::new(Token::Operator(Operator::Not));
+        let mut not_right = ASTNode::new(Token::Operator(Operator::Not));
 
-    // #[test]
-    // fn test_construct_rpn_double_parent_should_not_change_anything2() {
-    //     let mut lexer = Lexer::new("(1 ^ (0 v 1))");
-    //     let results = construct_rpn(&mut lexer);
+        not_left.add_left_token(Token::Value(Value::Bool(true)));
+        not_right.add_left_token(Token::Value(Value::Bool(false)));
 
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::Or),
-    //         Token::Operator(Operator::And),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
+        or.add_left_child(not_left);
+        or.add_right_child(not_right);
 
-    // #[test]
-    // fn test_construct_rpn_repeated_and() {
-    //     let mut lexer = Lexer::new("1 ^ 0 ^ 1 ^ 0");
-    //     let results = construct_rpn(&mut lexer);
+        let right = ASTNode::new(Token::Value(Value::Bool(false)));
 
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Operator(Operator::And),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::And),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Operator(Operator::And),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
+        let expected = ASTNode {
+            token: Token::Operator(Operator::Equivalence),
+            left: Some(Box::new(or)),
+            right: Some(Box::new(right)),
+        };
 
-    // #[test]
-    // fn test_construct_rpn_negation() {
-    //     let mut lexer = Lexer::new("~1 v ~0");
-    //     let results = construct_rpn(&mut lexer);
-
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::Not),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Operator(Operator::Not),
-    //         Token::Operator(Operator::Or),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
-
-    // #[test]
-    // fn test_construct_rpn_negation_with_parentheses() {
-    //     let mut lexer = Lexer::new("(1 v 0) ^ ~1");
-    //     let results = construct_rpn(&mut lexer);
-
-    //     let expected = VecDeque::from(vec![
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Value(Value::Bool(false)),
-    //         Token::Operator(Operator::Or),
-    //         Token::Value(Value::Bool(true)),
-    //         Token::Operator(Operator::Not),
-    //         Token::Operator(Operator::And),
-    //     ]);
-    //     assert_eq!(results, expected);
-    // }
+        assert_eq!(results, expected);
+    }
 }
