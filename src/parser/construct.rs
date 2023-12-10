@@ -1,6 +1,7 @@
 use std::unimplemented;
 
 use anyhow::{anyhow, Result};
+use log::debug;
 
 use crate::lexer::{Lexer, Operator, Token};
 use crate::parser::ASTNode;
@@ -32,11 +33,13 @@ fn make_node(tree_queue: &mut Vec<ASTNode>, operator: Operator) {
     }
 }
 
+/// Shunting yard algorithm
 pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
     let mut operators: Vec<Operator> = Vec::new();
     let mut tree_queue: Vec<ASTNode> = Vec::new();
 
     while let Some(token) = lexer.next() {
+        debug!("{}", token);
         match token {
             Token::Value(v) => {
                 let node = ASTNode {
@@ -67,6 +70,7 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
                             operators.push(current_op);
                         }
                         Some(prev_op) => {
+                            debug!("Op: {:?} > {:?} = {:?}", current_op, prev_op, current_op > prev_op);
                             if current_op > prev_op {
                                 operators.push(prev_op);
                             } else {
@@ -395,7 +399,6 @@ mod tests {
 
         assert_eq!(results, expected);
     }
-
 
     #[test]
     fn test_construct_ast_equivalence_precedence() {

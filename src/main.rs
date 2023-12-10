@@ -4,6 +4,8 @@ use std::io::Read;
 use std::env;
 use std::path::Path;
 
+use env_logger::Env;
+
 use logic_solver::parser::{ASTNode, construct_ast};
 use logic_solver::lexer::Lexer;
 use logic_solver::interpreter::evaluate;
@@ -18,6 +20,8 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let file_path = &args[1];
 
+    let env = Env::default().filter_or("LOG_LEVEL", "info");
+    env_logger::init_from_env(env);
     let mut file = File::open(file_path)?;
     let mut buffer = String::new();
     file.read_to_string(&mut buffer)?;
@@ -28,6 +32,6 @@ fn main() -> Result<()> {
     ast_root.visualize_graph(&graph_path)?;
 
     let res = evaluate(ast_root);
-    println!("{:?}", res);
+    println!("Result: {:?}", res.map_or("Error", |value| if value {"0"} else {"1"}));
     Ok(())
 }

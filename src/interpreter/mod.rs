@@ -155,6 +155,7 @@ mod tests {
     #[case("1 ^ 0 v 1", Some(true))]
     #[case("(1 => 0) ^ 1)", Some(false))]
     #[case("~(1 ^ 1)", Some(false))]
+    #[case("~1 v ~1 <=> 0", Some(false))]
     #[case("~1 v ~0 <=> ~(1 ^ 0)", Some(true))]
     fn test_evaluate_complex_expressions(#[case] expr: &str, #[case] expected: Option<bool>) {
         let mut lexer = Lexer::new(expr);
