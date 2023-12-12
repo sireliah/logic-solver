@@ -3,7 +3,7 @@ use std::{collections::VecDeque, fmt, fs::File, io::Write, path::Path};
 
 use crate::lexer::Token;
 mod construct;
-pub use construct::{construct_ast, construct_ast_custom};
+pub use construct::construct_ast;
 
 #[derive(Debug, PartialEq)]
 pub struct ASTNode {
@@ -94,14 +94,12 @@ impl ASTNode {
                 Token::Operator(_) => {
                     format!("    {} [label=\"{}\" shape=\"box\"]\n", counter, token)
                 }
-                Token::Empty => format!("    {} [label=\"{}\"]\n", counter, token),
-                _ => "\n".to_string(),
             }
         }
 
         let mut queue = VecDeque::new();
         let mut graph_relations = vec![];
-        let mut graph = vec!["digraph G {\n".to_string()];
+        let mut graph = vec!["graph G {\n".to_string()];
         let mut counter: u32 = 0;
         graph.push(write_definition(counter, &self.token));
 
@@ -112,20 +110,18 @@ impl ASTNode {
                 Some((num, node)) => {
                     if counter > 0 {
                         graph.push(write_definition(counter, &node.token));
-                        graph_relations.push(format!("    {} -> {}\n", num, counter));
+                        graph_relations.push(format!("    {} -- {}\n", num, counter));
                     }
                     if let Some(left) = &node.left {
                         match left.token {
                             Token::Operator(_) => queue.push_back((counter, Box::new(&left))),
                             Token::Value(_) => queue.push_back((counter, Box::new(&left))),
-                            _ => {}
                         };
                     };
                     if let Some(right) = &node.right {
                         match right.token {
                             Token::Operator(_) => queue.push_back((counter, Box::new(&right))),
                             Token::Value(_) => queue.push_back((counter, Box::new(&right))),
-                            _ => {}
                         };
                     };
                 }

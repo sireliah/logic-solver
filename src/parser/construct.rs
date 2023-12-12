@@ -1,5 +1,3 @@
-use std::unimplemented;
-
 use anyhow::{anyhow, Result};
 use log::debug;
 
@@ -40,6 +38,7 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
 
     while let Some(token) = lexer.next() {
         debug!("{}", token);
+        debug!("{:#?}", operators);
         match token {
             Token::Value(v) => {
                 let node = ASTNode {
@@ -61,28 +60,28 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
                     }
                 }
                 current_op => {
-                    // Check last operator in the stack
-                    match operators.pop() {
-                        // This is countermeasure for the fact that parentheses have precedence in enum
-                        // If possible, this should be fixed.
-                        Some(prev_op) if prev_op == Operator::ParenthisOpen => {
-                            operators.push(prev_op);
-                            operators.push(current_op);
+                    let mut v = vec![];
+                    while let Some(op) = operators.pop() {
+                        match op {
+                            // Left parenthesis is treated separately, because it has
+                            // precedence property (highest) in this implementation.
+                            Operator::ParenthisOpen => {
+                                v.push(op);
+                                break;
+                            }
+                            _ => {
+                                if op >= current_op {
+                                    make_node(&mut tree_queue, op);
+                                } else {
+                                    v.push(op);
+                                }
+                            }
                         }
-                        Some(prev_op) => {
-                            debug!("Op: {:?} > {:?} = {:?}", current_op, prev_op, current_op > prev_op);
-                            if current_op > prev_op {
-                                operators.push(prev_op);
-                            } else {
-                                make_node(&mut tree_queue, prev_op);
-                            };
-                            operators.push(current_op);
-                        }
-                        None => operators.push(current_op),
-                    };
+                    }
+                    operators.extend(v);
+                    operators.push(current_op);
                 }
             },
-            Token::Empty => unimplemented!(),
         }
     }
     for op in operators.into_iter().rev() {
@@ -92,130 +91,6 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
     tree_queue.pop().ok_or(anyhow!(
         "Invalid syntax, expected at least one AST node left"
     ))
-}
-
-pub fn construct_ast_custom(mut root: ASTNode, lexer: &mut Lexer) -> Result<ASTNode> {
-    while let Some(token) = lexer.next() {
-        println!("Token: {}", token);
-        match token {
-            Token::Empty => unimplemented!(),
-            Token::Value(_) => handle_value(&mut root, token)?,
-            Token::Operator(op) if op == Operator::ParenthisOpen => {
-                // FIXME: bug here - root stays empty
-                println!("Parent open, descending");
-                let new_root = ASTNode {
-                    token: Token::Empty,
-                    left: None,
-                    right: None,
-                };
-                let sub_node = construct_ast_custom(new_root, lexer)?;
-                println!("Root: {}, new root: {}", root, sub_node);
-                if let Token::Empty = root.token {
-                    root.left = Some(Box::new(sub_node));
-                } else {
-                    root.right = Some(Box::new(sub_node));
-                }
-            }
-            Token::Operator(op) if op == Operator::ParenthisClosed => return Ok(root),
-            Token::Operator(_) => {
-                root = handle_operator(root, token)?;
-            }
-        }
-    }
-    Ok(root)
-}
-
-fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
-    match root.token {
-        Token::Empty => root.add_left_token(token),
-        Token::Operator(ref operator) => match operator {
-            Operator::And => {
-                match root.right {
-                    Some(ref mut right) => {
-                        descend_right(right, token);
-                    }
-                    None => {
-                        root.add_right_token(token);
-                    }
-                };
-            }
-            Operator::Or => {
-                match root.right {
-                    Some(ref mut right) => {
-                        descend_right(right, token);
-                    }
-                    None => {
-                        root.add_right_token(token);
-                    }
-                };
-            }
-            Operator::Not => {
-                // FIXME: Check me
-                println!("HERE: {}", root);
-                if let Some(_) = root.left {
-                    root.add_right_token(token);
-                } else {
-                    root.add_left_token(token);
-                }
-            }
-            _ => unimplemented!(),
-        },
-        _ => return Err(anyhow!("Expected operator after a value")),
-    };
-    Ok(())
-}
-
-fn handle_operator(mut root: ASTNode, token: Token) -> Result<ASTNode> {
-    println!("Root token: {}", root);
-    match root.token {
-        Token::Empty => {
-            println!("Root token was empty, setting token to: {}", token);
-            root.token = token;
-        }
-        Token::Value(_) => return Err(anyhow!("Value can never be a root")),
-        Token::Operator(ref op) => match op {
-            Operator::Not => {
-                println!("Root: {}, Parsing: {}", root.token, token);
-                let new_root = root.make_new_root_left(token);
-                return Ok(new_root);
-            }
-            Operator::Or => {
-                // take right child of root and place node there
-                // make this child left of this node
-                let right = root.right.take();
-                let node = ASTNode {
-                    token,
-                    left: right,
-                    right: None,
-                };
-                root.right = Some(Box::new(node));
-            }
-            Operator::And => {
-                // FIXME: This probably doesn't cover all cases
-                match token {
-                    Token::Value(_) => {
-                        root.add_right_token(token);
-                    }
-                    Token::Operator(_) => {
-                        let new_root = root.make_new_root_left(token);
-                        return Ok(new_root);
-                    }
-                    _ => unimplemented!(),
-                }
-            }
-            _ => unimplemented!(),
-        },
-        // FIXME: Cover missing
-        _ => unimplemented!(),
-    };
-    Ok(root)
-}
-
-fn descend_right(node: &mut Box<ASTNode>, token: Token) {
-    match node.right {
-        Some(ref mut right) => descend_right(right, token),
-        None => node.add_right_token(token),
-    };
 }
 
 #[cfg(test)]
@@ -426,3 +301,132 @@ mod tests {
         assert_eq!(results, expected);
     }
 }
+
+// This is my own alternative implementation of parser that built the AST
+// recursively rather than with stacks.
+// It was not used in the end, because of worse ability to handle operator
+// precedence.
+//
+// pub fn construct_ast_alt(mut root: ASTNode, lexer: &mut Lexer) -> Result<ASTNode> {
+//     while let Some(token) = lexer.next() {
+//         println!("Token: {}", token);
+//         match token {
+//             Token::Empty => unimplemented!(),
+//             Token::Value(_) => handle_value(&mut root, token)?,
+//             Token::Operator(op) if op == Operator::ParenthisOpen => {
+//                 // FIXME: bug here - root stays empty
+//                 println!("Parent open, descending");
+//                 let new_root = ASTNode {
+//                     token: Token::Empty,
+//                     left: None,
+//                     right: None,
+//                 };
+//                 let sub_node = construct_ast_custom(new_root, lexer)?;
+//                 println!("Root: {}, new root: {}", root, sub_node);
+//                 if let Token::Empty = root.token {
+//                     root.left = Some(Box::new(sub_node));
+//                 } else {
+//                     root.right = Some(Box::new(sub_node));
+//                 }
+//             }
+//             Token::Operator(op) if op == Operator::ParenthisClosed => return Ok(root),
+//             Token::Operator(_) => {
+//                 root = handle_operator(root, token)?;
+//             }
+//         }
+//     }
+//     Ok(root)
+// }
+
+// fn handle_value(root: &mut ASTNode, token: Token) -> Result<()> {
+//     match root.token {
+//         Token::Empty => root.add_left_token(token),
+//         Token::Operator(ref operator) => match operator {
+//             Operator::And => {
+//                 match root.right {
+//                     Some(ref mut right) => {
+//                         descend_right(right, token);
+//                     }
+//                     None => {
+//                         root.add_right_token(token);
+//                     }
+//                 };
+//             }
+//             Operator::Or => {
+//                 match root.right {
+//                     Some(ref mut right) => {
+//                         descend_right(right, token);
+//                     }
+//                     None => {
+//                         root.add_right_token(token);
+//                     }
+//                 };
+//             }
+//             Operator::Not => {
+//                 // FIXME: Check me
+//                 println!("HERE: {}", root);
+//                 if let Some(_) = root.left {
+//                     root.add_right_token(token);
+//                 } else {
+//                     root.add_left_token(token);
+//                 }
+//             }
+//             _ => unimplemented!(),
+//         },
+//         _ => return Err(anyhow!("Expected operator after a value")),
+//     };
+//     Ok(())
+// }
+
+// fn handle_operator(mut root: ASTNode, token: Token) -> Result<ASTNode> {
+//     println!("Root token: {}", root);
+//     match root.token {
+//         Token::Empty => {
+//             println!("Root token was empty, setting token to: {}", token);
+//             root.token = token;
+//         }
+//         Token::Value(_) => return Err(anyhow!("Value can never be a root")),
+//         Token::Operator(ref op) => match op {
+//             Operator::Not => {
+//                 println!("Root: {}, Parsing: {}", root.token, token);
+//                 let new_root = root.make_new_root_left(token);
+//                 return Ok(new_root);
+//             }
+//             Operator::Or => {
+//                 // take right child of root and place node there
+//                 // make this child left of this node
+//                 let right = root.right.take();
+//                 let node = ASTNode {
+//                     token,
+//                     left: right,
+//                     right: None,
+//                 };
+//                 root.right = Some(Box::new(node));
+//             }
+//             Operator::And => {
+//                 // FIXME: This probably doesn't cover all cases
+//                 match token {
+//                     Token::Value(_) => {
+//                         root.add_right_token(token);
+//                     }
+//                     Token::Operator(_) => {
+//                         let new_root = root.make_new_root_left(token);
+//                         return Ok(new_root);
+//                     }
+//                     _ => unimplemented!(),
+//                 }
+//             }
+//             _ => unimplemented!(),
+//         },
+//         // FIXME: Cover missing
+//         _ => unimplemented!(),
+//     };
+//     Ok(root)
+// }
+
+// fn descend_right(node: &mut Box<ASTNode>, token: Token) {
+//     match node.right {
+//         Some(ref mut right) => descend_right(right, token),
+//         None => node.add_right_token(token),
+//     };
+// }

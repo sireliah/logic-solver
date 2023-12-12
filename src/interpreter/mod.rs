@@ -6,7 +6,6 @@ pub fn evaluate(node: ASTNode) -> Option<bool> {
     let r_value = node.right.and_then(|right| evaluate(*right));
 
     match node.token {
-        Token::Empty => None,
         Token::Value(value) => match value {
             Value::Bool(val) => Some(val),
             Value::Variable(_var) => todo!(),
@@ -155,8 +154,9 @@ mod tests {
     #[case("1 ^ 0 v 1", Some(true))]
     #[case("(1 => 0) ^ 1)", Some(false))]
     #[case("~(1 ^ 1)", Some(false))]
-    #[case("~1 v ~1 <=> 0", Some(false))]
+    #[case("~1 v ~1 <=> 0", Some(true))]
     #[case("~1 v ~0 <=> ~(1 ^ 0)", Some(true))]
+    #[case("((1 v 0) => 0) ^ 1", Some(false))]
     fn test_evaluate_complex_expressions(#[case] expr: &str, #[case] expected: Option<bool>) {
         let mut lexer = Lexer::new(expr);
         let root = construct_ast(&mut lexer).unwrap();

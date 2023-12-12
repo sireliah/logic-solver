@@ -32,6 +32,6 @@ fn main() -> Result<()> {
     ast_root.visualize_graph(&graph_path)?;
 
     let res = evaluate(ast_root);
-    println!("Result: {:?}", res.map_or("Error", |value| if value {"0"} else {"1"}));
+    println!("Result: {:?}", res.map_or("Error", |value| if value {"1"} else {"0"}));
     Ok(())
 }

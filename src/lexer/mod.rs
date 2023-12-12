@@ -32,7 +32,6 @@ impl fmt::Display for Value {
 pub enum Token {
     Value(Value),
     Operator(Operator),
-    Empty,
 }
 
 impl Token {
@@ -47,7 +46,6 @@ impl fmt::Display for Token {
         match self {
             Token::Value(v) => write!(f, "{}", v),
             Token::Operator(v) => write!(f, "{:?}", v),
-            Token::Empty => write!(f, "Empty"),
         }
     }
 }
