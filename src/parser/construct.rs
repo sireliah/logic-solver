@@ -37,10 +37,11 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
     let mut tree_queue: Vec<ASTNode> = Vec::new();
 
     while let Some(token) = lexer.next() {
-        debug!("{}", token);
+        debug!("{:?}", token);
         debug!("{:#?}", operators);
         match token {
-            Token::Value(v) => {
+            Err(e) => return Err(e),
+            Ok(Token::Value(v)) => {
                 let node = ASTNode {
                     token: Token::Value(v),
                     left: None,
@@ -48,7 +49,7 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
                 };
                 tree_queue.push(node);
             }
-            Token::Operator(operator) => match operator {
+            Ok(Token::Operator(operator)) => match operator {
                 Operator::ParenthisOpen => operators.push(Operator::ParenthisOpen),
                 Operator::ParenthisClosed => {
                     while let Some(inner_op) = operators.pop() {

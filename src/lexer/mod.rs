@@ -1,5 +1,7 @@
 use std::{fmt, iter::Peekable, str::Chars};
 
+use anyhow::{anyhow, Result};
+
 // Order of variants in this enum encodes operator precedence
 // where top one is the least significant
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -63,7 +65,7 @@ impl Lexer<'_> {
 }
 
 impl Iterator for Lexer<'_> {
-    type Item = Token;
+    type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -81,10 +83,13 @@ impl Iterator for Lexer<'_> {
                     if let (Some('='), Some('>')) = (next, next_after) {
                         Token::Operator(Operator::Equivalence)
                     } else {
-                        // FIXME: Add early error handling
-                        continue;
+                        return Some(Err(anyhow!(
+                            "Unexpected '{}{}' after <. Did you mean '<=>'?",
+                            next.unwrap_or(' '),
+                            next_after.unwrap_or(' ')
+                        )));
                     }
-                },
+                }
                 Some('=') => {
                     // "=>" implication is differentiated from equivalence only because
                     // the iterator advanced twice on previous step
@@ -97,10 +102,10 @@ impl Iterator for Lexer<'_> {
                 },
                 Some(other) if other.is_digit(10) => Token::from_digit(other),
                 Some(other) if other.is_whitespace() => continue,
-                Some(_) => continue,
+                Some(other) => return Some(Err(anyhow!("Unexpected character '{}'", other))),
                 None => return None,
             };
-            return Some(token);
+            return Some(Ok(token));
         }
     }
 }
