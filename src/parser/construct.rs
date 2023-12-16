@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Result};
 use log::debug;
 
-use crate::lexer::{Lexer, Operator, Token};
-use crate::parser::ASTNode;
+use crate::lexer::{Lexer, Operator, Token, Value};
+use crate::parser::{ASTNode, StoredVariables};
 
 fn make_node(tree_queue: &mut Vec<ASTNode>, operator: Operator) {
     if let Some(right) = tree_queue.pop() {
@@ -31,25 +33,45 @@ fn make_node(tree_queue: &mut Vec<ASTNode>, operator: Operator) {
     }
 }
 
-/// Shunting yard algorithm
-pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
+/// Shunting yard algorithm with simple state machine for assigning variables
+pub fn construct_ast(lexer: &mut Lexer) -> Result<(ASTNode, StoredVariables)> {
+    let mut stored_variables: StoredVariables = HashMap::new();
     let mut operators: Vec<Operator> = Vec::new();
     let mut tree_queue: Vec<ASTNode> = Vec::new();
+    let mut variable_name: Option<String> = None;
+    let mut assignment = false;
 
     while let Some(token) = lexer.next() {
         debug!("{:?}", token);
         debug!("{:#?}", operators);
+
         match token {
             Err(e) => return Err(e),
-            Ok(Token::Value(v)) => {
-                let node = ASTNode {
-                    token: Token::Value(v),
-                    left: None,
-                    right: None,
-                };
-                tree_queue.push(node);
-            }
+            Ok(Token::Value(value)) => match value {
+                Value::Bool(boolean_v) => {
+                    if assignment {
+                        if let Some(var) = variable_name.take() {
+                            stored_variables.insert(var, boolean_v);
+                            assignment = false;
+                        }
+                    } else {
+                        tree_queue.push(ASTNode::new(Token::Value(Value::Bool(boolean_v))));
+                    }
+                }
+                Value::Variable(variable) => {
+                    match stored_variables.get(&variable) {
+                        Some(_) => {
+                            tree_queue.push(ASTNode::new(Token::Value(Value::Variable(variable))))
+                        }
+                        None => variable_name = Some(variable),
+                    };
+                }
+            },
             Ok(Token::Operator(operator)) => match operator {
+                Operator::Assign => match variable_name {
+                    Some(_) => assignment = true,
+                    None => return Err(anyhow!("Invalid syntax: found no variable to assign.")),
+                },
                 Operator::ParenthisOpen => operators.push(Operator::ParenthisOpen),
                 Operator::ParenthisClosed => {
                     while let Some(inner_op) = operators.pop() {
@@ -89,13 +111,22 @@ pub fn construct_ast(lexer: &mut Lexer) -> Result<ASTNode> {
         make_node(&mut tree_queue, op);
     }
 
-    tree_queue.pop().ok_or(anyhow!(
-        "Invalid syntax, expected at least one AST node left"
-    ))
+    if let Some(variable) = variable_name {
+        return Err(anyhow!("Undefined variable {}", variable));
+    };
+
+    match tree_queue.pop() {
+        Some(root) => Ok((root, stored_variables)),
+        None => Err(anyhow!(
+            "Invalid syntax, expected at least one AST node left"
+        )),
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::construct_ast;
     use crate::{
         lexer::{Lexer, Operator, Token, Value},
@@ -105,7 +136,7 @@ mod tests {
     #[test]
     fn test_construct_rpn_and() {
         let mut lexer = Lexer::new("1 ^ 0");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
         let right = ASTNode::new(Token::Value(Value::Bool(false)));
@@ -120,7 +151,7 @@ mod tests {
     #[test]
     fn test_construct_ast_and_before_or() {
         let mut lexer = Lexer::new("1 ^ 0 v 1");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
         let middle = ASTNode::new(Token::Value(Value::Bool(false)));
@@ -141,7 +172,7 @@ mod tests {
     #[test]
     fn test_construct_ast_or_before_and() {
         let mut lexer = Lexer::new("1 v 0 ^ 1");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
         let middle = ASTNode::new(Token::Value(Value::Bool(false)));
@@ -162,7 +193,7 @@ mod tests {
     #[test]
     fn test_construct_ast_parent_with_lower_prec() {
         let mut lexer = Lexer::new("1 ^ (0 v 1)");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let left = ASTNode::new(Token::Value(Value::Bool(true)));
 
@@ -181,7 +212,7 @@ mod tests {
     #[test]
     fn test_construct_ast_parent_with_higher_prec() {
         let mut lexer = Lexer::new("(1 ^ 0) v 1");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let right = ASTNode::new(Token::Value(Value::Bool(true)));
 
@@ -200,8 +231,7 @@ mod tests {
     #[test]
     fn test_construct_rpn_double_parent_should_not_change_anything() {
         let mut lexer = Lexer::new("((1 ^ 0) v 1)");
-
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let right = ASTNode::new(Token::Value(Value::Bool(true)));
         let mut and = ASTNode::new(Token::Operator(Operator::And));
@@ -219,7 +249,7 @@ mod tests {
     #[test]
     fn test_construct_ast_negation() {
         let mut lexer = Lexer::new("~1 v 0");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let right = ASTNode::new(Token::Value(Value::Bool(false)));
 
@@ -238,7 +268,7 @@ mod tests {
     #[test]
     fn test_construct_ast_negation_double() {
         let mut lexer = Lexer::new("~1 v ~0");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let mut not = ASTNode::new(Token::Operator(Operator::Not));
         not.add_left_token(Token::Value(Value::Bool(true)));
@@ -257,7 +287,7 @@ mod tests {
     #[test]
     fn test_construct_ast_longer_statement() {
         let mut lexer = Lexer::new("0 ^ 1 v 0 ^ 1");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let mut left_and = ASTNode::new(Token::Operator(Operator::And));
         left_and.add_left_token(Token::Value(Value::Bool(false)));
@@ -279,7 +309,7 @@ mod tests {
     #[test]
     fn test_construct_ast_equivalence_precedence() {
         let mut lexer = Lexer::new("~1 v ~0 <=> 0");
-        let results = construct_ast(&mut lexer).unwrap();
+        let (results, _) = construct_ast(&mut lexer).unwrap();
 
         let mut or = ASTNode::new(Token::Operator(Operator::Or));
         let mut not_left = ASTNode::new(Token::Operator(Operator::Not));
@@ -300,6 +330,38 @@ mod tests {
         };
 
         assert_eq!(results, expected);
+    }
+
+    #[test]
+    fn test_construct_ast_with_variables() {
+        let mut lexer = Lexer::new("p := 0 q := 1 ~p v ~q");
+        let (results, vars) = construct_ast(&mut lexer).unwrap();
+
+        let mut not = ASTNode::new(Token::Operator(Operator::Not));
+        not.add_left_token(Token::Value(Value::Variable("p".to_string())));
+        let mut not2 = ASTNode::new(Token::Operator(Operator::Not));
+        not2.add_left_token(Token::Value(Value::Variable("q".to_string())));
+
+        let expected = ASTNode {
+            token: Token::Operator(Operator::Or),
+            left: Some(Box::new(not)),
+            right: Some(Box::new(not2)),
+        };
+
+        let mut expected_vars = HashMap::new();
+        expected_vars.insert("p".to_string(), false);
+        expected_vars.insert("q".to_string(), true);
+
+        assert_eq!(results, expected);
+        assert_eq!(vars, expected_vars);
+    }
+
+    #[test]
+    fn test_construct_ast_with_variables_should_fail_on_undefined() {
+        let mut lexer = Lexer::new("p := 0 ~p v ~w");
+        let results = construct_ast(&mut lexer);
+
+        assert!(results.is_err());
     }
 }
 

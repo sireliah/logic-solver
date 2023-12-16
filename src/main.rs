@@ -6,14 +6,14 @@ use std::path::Path;
 
 use env_logger::Env;
 
-use logic_solver::parser::{ASTNode, construct_ast};
+use logic_solver::parser::{ASTNode, StoredVariables, construct_ast};
 use logic_solver::lexer::Lexer;
 use logic_solver::interpreter::evaluate;
 
-fn parse(contents: &str) -> Result<ASTNode> {
+fn parse(contents: &str) -> Result<(ASTNode, StoredVariables)> {
     let mut lexer = Lexer::new(contents);
-    let root = construct_ast(&mut lexer)?;
-    Ok(root)
+    let (root, variables) = construct_ast(&mut lexer)?;
+    Ok((root, variables))
 }
 
 fn main() -> Result<()> {
@@ -25,13 +25,12 @@ fn main() -> Result<()> {
     let mut file = File::open(file_path)?;
     let mut buffer = String::new();
     file.read_to_string(&mut buffer)?;
-    let ast_root = parse(&buffer)?;
-
+    let (ast_root, variables) = parse(&buffer)?;
 
     let graph_path = Path::new("graph.dot");
     ast_root.visualize_graph(&graph_path)?;
 
-    let res = evaluate(ast_root);
-    println!("Result: {:?}", res.map_or("Error", |value| if value {"1"} else {"0"}));
+    let res = evaluate(ast_root, &variables)?;
+    println!("Result: {}", res);
     Ok(())
 }

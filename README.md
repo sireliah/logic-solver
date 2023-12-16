@@ -3,10 +3,13 @@
 Experimental interpreter that is able to evaluate propositional logic statements.
 
 ```bash
-$ echo "~1 v ~0 <=> ~(1 ^ 0)" > statement.prop
+$ echo "
+p := 1
+q := 0
+~p v ~q <=> ~(p ^ q)" > statement.prop
 $ cargo run statement.prop
 
-Result: "1"
+Result: true
 ```
 
 ## Visualizing AST

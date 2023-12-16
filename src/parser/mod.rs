@@ -1,9 +1,11 @@
 use anyhow::Result;
-use std::{collections::VecDeque, fmt, fs::File, io::Write, path::Path};
+use std::{collections::{VecDeque, HashMap}, fmt, fs::File, io::Write, path::Path};
 
 use crate::lexer::Token;
 mod construct;
 pub use construct::construct_ast;
+
+pub type StoredVariables = HashMap<String, bool>;
 
 #[derive(Debug, PartialEq)]
 pub struct ASTNode {
