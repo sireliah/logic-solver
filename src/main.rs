@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fs::File;
 use std::io::Read;
 use std::env;
@@ -18,7 +18,11 @@ fn parse(contents: &str) -> Result<(ASTNode, StoredVariables)> {
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
-    let file_path = &args[1];
+    let file_path = match args.len() {
+        1 => return Err(anyhow!("Please provide file path to the statement")),
+        2 => &args[1],
+        _ => return Err(anyhow!("Expected just one file path")),
+    };
 
     let env = Env::default().filter_or("LOG_LEVEL", "info");
     env_logger::init_from_env(env);
